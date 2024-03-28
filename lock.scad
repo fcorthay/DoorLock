@@ -21,12 +21,15 @@ latchPlateLength = lockPlateLength - 3;
 latchPlateWidth = 20;
 latchPlateHeight = 3;
 latchPlateGuideWidth = 4;
+
+latchVHolderSideAngle = 30;
                                                                        // screws
 screwHolesDiameter = 5;
+screwHolesConeHeight = 1;
 screwHolesDistanceX = 12;
 screwHolesDistanceY = 8;
                                                                        // spring
-springDiameter = 1;
+springDiameter = 1.5;
 springStopDiameter = 5;
 
 //----------------------------------------------------------------------------\\
@@ -44,16 +47,22 @@ sliderHeight = (latchBottom + lockPlateHeight)/2 - latchMargin;
 springHeight = sliderHeight + springDiameter/2 + 3*latchMargin;
 
 bitAngle = atan(bitWidth/2 / bitHeight);
-topPositionLatchSlitDepth = (keyholeY + bitHeight)
+verticalBitLatchDepth = (keyholeY + bitHeight)
   - (latchTop - latchPlateWidth);
-bitStartAngle = acos(1 - topPositionLatchSlitDepth/bitHeight);
-minLatchSlitDepth = topPositionLatchSlitDepth + bitWidth/2*sin(bitAngle);
+deltaBitWidth = bitWidth/2*(1/cos(bitAngle) - 1);
+minLatchSlitDepth = verticalBitLatchDepth + deltaBitWidth/tan(bitAngle);
 latchSlitDepth = minLatchSlitDepth + bitMargin;
-latchSlitLength = 19 + bitMargin;
 
-firstSlitOffset = lockPlateLength + latchSlitLength - keyholeX - bitWidth/2;
-secondSlitOffset = 27;
-slitOffsets = [firstSlitOffset, firstSlitOffset + secondSlitOffset];
+bitDiagonal = bitHeight/cos(bitAngle);
+bitStartAngle = acos(1 - minLatchSlitDepth/bitDiagonal);
+bitSlitDisplacement = bitDiagonal*sin(bitStartAngle);
+latchSlitLength = bitWidth/2 + bitSlitDisplacement + bitMargin;
+
+firstSlitOffset = lockPlateLength - keyholeX - bitWidth/2 + latchSlitLength;
+slitsDistance = 2*bitSlitDisplacement;
+slitOffsets = [firstSlitOffset, firstSlitOffset + slitsDistance];
+
+latchLockerWidth = 2*bitHeight;
 
 //––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––\\
 renderForPrint = false;
@@ -66,11 +75,11 @@ printerPlateHeight = 1;
 printerPlateMargin = 10;
 
 printBottomPlate = true;
-printTopPlate = false;
+printTopPlate = true;
 printLatch = true;
 printLatchLocker = true;
-printLatchPlateTopHolder = true;
-printKey = false;
+printLatchPlateTopHolder = false;
+printKey = true;
                                                       // 3D rendering parameters
 showTopPlate = false;
 showSideWalls = false;
@@ -123,9 +132,9 @@ if (renderForPrint) {
     latchPlateTopHolder(printLatchPlateTopHolder);
                                                                           // key
   translate([
-    bowTorusDiameter + bowTorusTubeThinDiameter/2,
+    -bitStart + latchBoltLength + latchLockerWidth + 2*printDistance,
     lockPlateWidth + latchBoltWidth + bowTorusDiameter + printDistance,
-    bowBallDiameter/2
+    useLogoBow ? bitWidth/2 : bowBallDiameter/2
   ])
     key(printKey);
 }
@@ -140,13 +149,8 @@ else {
 
 //––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––\\
                                                                     // animation
-
-//############################################################################\\
-//############################################################################\\
-//############################################################################\\
-
-fixedPosition = 2;
-animate = false;  // FPS: 10, Steps: 40
+fixedPosition = 6;
+animate = true;  // FPS: 10, Steps: 400
 
 lockEnteringAngle = 180 - bitStartAngle - bitAngle;
 lockEnteredAngle  = 180 - bitStartAngle + bitAngle;
@@ -184,54 +188,81 @@ specificKeyAngles = [
 halfDisplacement = 20;
 clockwise = animate ? $t < 0.5 : fixedPosition <= halfDisplacement;
 
-function animationPosition(t) = t < 3/4 ? len(specificKeyAngles)*4/3*t : 0;
-position = animate ? animationPosition($t) : fixedPosition;
-echo(position = position);
-keyAngle = specificKeyAngles[position];
+function animationAngle(t) =
+  t < 1/8 ? 360*8*t :
+  t < 2/8 ? 360           :
+  t < 3/8 ? 360*(-1 + 8*t) :
+  t < 4/8 ? 2*360           :
+  t < 5/8 ? 360*( 6 - 8*t) :
+  t < 6/8 ? 360           :
+  t < 7/8 ? 360*( 7 - 8*t) :
+            0;
+position = fixedPosition;
+keyAngle = animate ? animationAngle($t) : specificKeyAngles[position];
+
+toClosing1 = 1; closing1 = 2; toClosing2 = 3; closing2=4; closed = 5;
+toOpening2 = 6; opening2 = 7; toOpening1 = 8; opening1 = 9; open=10;
+workRegion =
+  clockwise ?
+    keyAngle <= 180                     ? toClosing1 :
+    keyAngle <= lockExitingAngle        ? closing1   :
+    keyAngle <= 360 + lockEnteringAngle ? toClosing2 :
+    keyAngle <= 360 + lockExitingAngle  ? closing2   :
+                                          closed
+  :
+    keyAngle >= 360 + 180               ? toOpening2 :
+    keyAngle >= 360 + lockEnteredAngle  ? opening2   :
+    keyAngle >= lockExitedAngle         ? toOpening1 :
+    keyAngle >= lockEnteredAngle        ? opening1   :
+                                          open;
+echo(str(
+   "\n\n",
+   "t = ", $t, "\n",
+   "keyAngle = ", keyAngle, " (", keyAngle/360, ")\n",
+   "clockwise = ", clockwise, "\n",
+   "workRegion = ", workRegion, "\n",
+   "\n"
+ ));
                                                            // latch displacement
-turnHeight = bitHeight/cos(bitAngle);
-lockPosition2 = -turnHeight*sin(lockExitingAngle);
-lockPosition3 = secondSlitOffset + lockPosition2;
-lockPosition4 = lockPosition3 - latchSlitLength + lockPosition2;
-lockPosition1 = lockPosition2 - lockPosition3 + lockPosition4;
+lockPosition1 = 0;
+lockPosition2 = bitDiagonal*sin(bitStartAngle) - bitWidth/2 + bitMargin;
+lockPosition3 = lockPosition2 + slitsDistance;
+lockPosition4 = lockPosition1 + slitsDistance;
+//echo(lockPosition1 = lockPosition1);
+//echo(lockPosition2 = lockPosition2);
+//echo(lockPosition3 = lockPosition3);
+//echo(lockPosition4 = lockPosition4);
 
-diagonalKeyAngle1 = 
-  keyAngle % 360 > 180 ? (keyAngle % 360) + bitAngle -180
-                       : 180 - (keyAngle % 360) + bitAngle;
-echo(keyAngle = (keyAngle-180));
-echo(diagonalKeyAngle1 = diagonalKeyAngle1);
+diagonalKeyAngleCw = ((keyAngle - 180) % 360) + bitAngle;
+diagonalKeyAngleCcw = ((keyAngle - 180) % 360) - bitAngle;
+//echo(lockEnteringAngle = lockEnteringAngle);
+//echo(diagonalKeyAngleCw = diagonalKeyAngleCw);
+//echo(diagonalKeyAngleCcw = diagonalKeyAngleCcw);
 
-singleTurnDisplacement = turnHeight*sin(diagonalKeyAngle1);
+turnDisplacementCw = bitDiagonal*sin(diagonalKeyAngleCw);
+turnDisplacementCcw = bitDiagonal*sin(diagonalKeyAngleCcw);
+//echo(turnDisplacementCw = turnDisplacementCw);
+//echo(turnDisplacementCcw = turnDisplacementCcw);
 
 latchDisplacement =
-  clockwise ?
-    keyAngle <= 180                     ? lockPosition1 :
-    keyAngle <= lockExitingAngle        ? singleTurnDisplacement - bitWidth/2 :
-    keyAngle <= 360 + lockEnteringAngle ? lockPosition2 :
-    keyAngle <= 360 + 180               ? secondSlitOffset
-                                        - singleTurnDisplacement + bitWidth/2 :
-    keyAngle <= 360 + lockExitingAngle  ? secondSlitOffset
-                                        + singleTurnDisplacement - bitWidth/2 :
-                                          lockPosition3
-  :
-    keyAngle >= 360 + 180               ? lockPosition3 :
-    keyAngle >= 360 + lockEnteredAngle  ? secondSlitOffset + latchSlitLength
-                                          - singleTurnDisplacement
-                                          - bitWidth/2 :
-    keyAngle >= lockExitedAngle         ? lockPosition4 :
-    keyAngle >= 180                     ? secondSlitOffset - latchSlitLength
-                                          + singleTurnDisplacement :
-    keyAngle >= lockEnteredAngle        ? latchSlitLength - bitWidth/2
-                                          - singleTurnDisplacement :
-                                          lockPosition1;
+  workRegion == toClosing1 ? lockPosition1 :
+  workRegion == closing1   ? lockPosition1 + turnDisplacementCw - bitWidth/2:
+  workRegion == toClosing2 ? lockPosition2 :
+  workRegion == closing2   ? lockPosition4 + turnDisplacementCw - bitWidth/2 :
+  workRegion == closed     ? lockPosition3 :
+  workRegion == toOpening2 ? lockPosition3 :
+  workRegion == opening2   ? lockPosition3 + turnDisplacementCcw + bitWidth/2 :
+  workRegion == toOpening1 ? lockPosition4 :
+  workRegion == opening1   ? lockPosition2 + turnDisplacementCcw + bitWidth/2 :
+                             lockPosition1;
 
                                                    // position lock displacement
 diagonalKeyAngle2 = 
   keyAngle % 360 < 180 ? 180 - (keyAngle % 360) - bitAngle
                        : 180 - (keyAngle % 360) + bitAngle;
 
-lockerDisplacement = turnHeight*cos(diagonalKeyAngle2)
-  - (bitHeight - topPositionLatchSlitDepth);
+lockerDisplacement = bitDiagonal*cos(diagonalKeyAngle2)
+  - (bitHeight - verticalBitLatchDepth);
 
 latchLockerDisplacement =
   keyAngle % 360 <= lockEnteringAngle ? 0 :
@@ -388,7 +419,8 @@ module bottomPlate(renderIt=true) {
                 );
             }
                                                                     // bit notch
-        if (addBitSlit) {
+//        if (addBitSlit) {
+        if (false) {
           color("LightGoldenrodYellow")
             translate([
               keyholeX - bitHeight - 3*lockPlateHeight,
@@ -400,10 +432,6 @@ module bottomPlate(renderIt=true) {
                 cube([bitSlitDepth, bitWidth, bitSlitWidth], center=false);
             }
         }
-//############################################################################\\
-//############################################################################\\
-//############################################################################\\
-
       }
                                                                   // screw holes
       color("SlateGray")
@@ -413,12 +441,17 @@ module bottomPlate(renderIt=true) {
           for (yOffset = [
             screwHolesDistanceY, lockPlateWidth - screwHolesDistanceY
           ])
-            translate([xOffset, yOffset, 0])
+            translate([xOffset, yOffset, 0]) {
+                                                                    // cylinders
+              cylinder(d=screwHolesDiameter, h=2*lockHeight, center=true);
+                                                                        // cones
               cylinder(
-                d=screwHolesDiameter,
-                h=2*lockHeight,
+                d1=screwHolesDiameter+4*screwHolesConeHeight,
+                d2=screwHolesDiameter,
+                h=2*screwHolesConeHeight,
                 center=true
               );
+            }
     }
   }
 }
@@ -443,8 +476,18 @@ module topPlate(renderIt=true) {
           for (yOffset = [
             screwHolesDistanceY, lockPlateWidth - screwHolesDistanceY
           ])
-            translate([xOffset, yOffset, 0])
+                                                                    // cylinders
+            translate([xOffset, yOffset, 0]) {
               cylinder(d=screwHolesDiameter, h=3*lockPlateHeight, center=true);
+                                                                        // cones
+              translate([0, 0, lockPlateHeight])
+                cylinder(
+                  d1=screwHolesDiameter,
+                  d2=screwHolesDiameter+4*screwHolesConeHeight,
+                  h=2*screwHolesConeHeight,
+                  center=true
+                );
+            }
                                                                // key shaft hole
         translate([keyholeX, keyholeY + bitMargin, 0])
           cylinder(d=keyholeDiameter, h=3*lockPlateHeight, center=true);
@@ -462,7 +505,12 @@ module topPlate(renderIt=true) {
                                                                         // latch
 module latch(renderIt=true) {
   if (renderIt) {
-    translate([latchDisplacement - lockPosition1, 0, 0]) {
+
+//############################################################################\\
+//############################################################################\\
+//############################################################################\\
+
+    translate([latchDisplacement, 0, 0]) {
                                                                          // bolt
       color("Goldenrod")
         translate([-latchBoltLength/2, 0, 0])
@@ -497,16 +545,15 @@ module latch(renderIt=true) {
             ])
               latchVHolder();
                                                         // inter- V-locks cutout
-          translate([
-            -keyholeX + lockPosition1
-              - (lockPosition4 - lockPosition2) - latchMargin,
-            latchPlateWidth
-              - minLatchSlitDepth + (turnHeight - bitHeight),
-            -lockHeight/2
-          ])
-            cube(
-              [lockPosition4 - lockPosition2, latchPlateWidth, lockHeight],
-            center = false);
+//          translate([
+//            -keyholeX - (lockPosition4 - lockPosition2) + 2*latchMargin,
+//            latchPlateWidth
+//              - minLatchSlitDepth + (bitDiagonal - bitHeight),
+//            -lockHeight/2
+//          ])
+//            cube(
+//              [lockPosition4 - lockPosition2, latchPlateWidth, lockHeight],
+//            center = false);
                                                                  // guiding slit
           guidingSlitOffsetX = -lockPlateLength + latchHolderLength
             - latchPlateGuideWidth/2;
@@ -594,7 +641,7 @@ module latchLocker(renderIt=true) {
                                                                    // main piece
             translate([-bitHeight, 0, 0])
               cube([
-                2*bitHeight,
+                latchLockerWidth,
                 latchPlateWidth + latchSlitDepth,
                 latchBottom - lockPlateHeight - latchMargin
               ], center=false);
@@ -618,7 +665,7 @@ module latchLocker(renderIt=true) {
         color("Salmon")
           translate([
             -bitHeight,
-            latchPlateWidth + latchSlitDepth/2,
+            latchPlateWidth + latchSlitDepth - springDiameter,
             sliderHeight - lockPlateHeight + 2*latchMargin
           ])
             cube([
@@ -655,11 +702,14 @@ module latchLocker(renderIt=true) {
 //----------------------------------------------------------------------------\\
                                                          // latch V-shape holder
 module latchVHolder() {
+  y1 = minLatchSlitDepth;
+  y2 = -minLatchSlitDepth + (bitDiagonal - bitHeight) + bitMargin;
+  backWidth = 2*(y1-y2)*tan(latchVHolderSideAngle);
   linear_extrude(height=latchPlateHeight+lockPlateHeight)
     polygon([
-      [-minLatchSlitDepth/2,  minLatchSlitDepth],
-      [0, -minLatchSlitDepth + (turnHeight - bitHeight) + latchMargin],
-      [ minLatchSlitDepth/2,  minLatchSlitDepth]
+      [-backWidth/2,  y1],
+      [ 0,            y2],
+      [ backWidth/2,  y1]
     ]);
 }
 
@@ -674,7 +724,7 @@ module holderSpring() {
           scale([side*springLength/2, scaleYZ, scaleYZ])
             rotate_extrude(angle=90)
               translate([2, 0, 0])
-                circle(r = 1/2/scaleYZ);
+                circle(r = springDiameter/2/scaleYZ);
         translate([side*springLength, 0, 0])
           cube([springLength, 2*springLength, springLength], center=true);
       }

@@ -1,11 +1,9 @@
 // key.scad - old style key
 include <shapes.scad>
-useShapesFromDrawing = true;
-isTopLevel = true;
-                                                                   // parameters
-bowType = "logo";
-//bowType = "toric";
-addBitSlit = true;
+isTopLevel = false;
+useShapesFromDrawing = false;
+useLogoBow = true;
+addBitSlit = false;
                                                                // key dimensions
 shaftDiameter = 8;
 shaftLength = 100;
@@ -61,6 +59,7 @@ bitSlitShapeMinimal = [
 bitSlitShape = useShapesFromDrawing ?
   bitSlitShapeFromDrawing : bitSlitShapeMinimal;
 
+// for writing a "schapes.scad" file: 
 //echo(str("bowLogoFromDrawing = ", bowLogoMinimal, ";"));
 //echo(str("bitShapeFromDrawing = ", bitShapeMinimal, ";"));
 //echo(str("bitSlitShapeFromDrawing = ", bitSlitShapeMinimal, ";"));
@@ -77,11 +76,11 @@ module key(renderIt=true) {
   if (renderIt) {
                                                                           // bow
     color("blue")
-      if (bowType == "toric") {
-        toricBow();
+      if (useLogoBow) {
+        logoBow();
       }
       else {
-        logoBow();
+        toricBow();
       }
                                                                         // shaft
     color("green")
@@ -165,24 +164,26 @@ module logoBow() {
                                                                         // shaft
 module shaft() {
     lengthWithoutHalfSpere = shaftLength - shaftDiameter/2;
-                                                                     // cylinder
-    if (bowType == "toric" || logoTubeDiameter >= shaftDiameter) {
-      rotate([0, 90, 0])
-        cylinder(h=lengthWithoutHalfSpere, d=shaftDiameter, center=false);
-    }
-    else {
+    if (useLogoBow) {
       rotate([0, 90, 0]) {
+                                                                     // cylinder
         translate([0, 0, logoConeToShaftLenghtRatio*lengthWithoutHalfSpere])
           cylinder(
             d=shaftDiameter,
             h=(1-logoConeToShaftLenghtRatio)*lengthWithoutHalfSpere,
             center=false
           );
+                                                                  // cone to bow
         cylinder(
           d1=logoTubeDiameter, d2=shaftDiameter,
           h=logoConeToShaftLenghtRatio*lengthWithoutHalfSpere,
           center=false);
       }
+    }
+    else {
+                                                         // full length cylinder
+      rotate([0, 90, 0])
+        cylinder(h=lengthWithoutHalfSpere, d=shaftDiameter, center=false);
     }
                                                   // half shpere at end of shaft
     translate([lengthWithoutHalfSpere, 0, 0])
